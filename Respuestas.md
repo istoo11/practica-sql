@@ -44,7 +44,7 @@ order by
 
 **Resultado:**
 
-![PONER FOTO EJ 02](./img/Ejercicio02.pnj)
+![PONER FOTO EJ 02](./img/Ejercicio02.png)
 
 **Comentario:**  He agrupado los clientes por país para poder contar cuántos clientes hay en cada uno y cuántas ciudades distintas aparecen. He utilizado HAVING en lugar de WHERE porque necesito filtrar después de realizar el COUNT, mostrando únicamente los países que tienen al menos 5 clientes. Además, he ordenado el resultado de mayor a menor número de clientes para facilitar su comparación.
 
