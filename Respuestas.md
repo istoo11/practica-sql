@@ -44,7 +44,7 @@ order by
 
 **Resultado:**
 
-![PONER FOTO EJ 02](./img/Ejercicio01.png)
+![PONER FOTO EJ 02](./img/Ejercicio01.pn)
 
 **Comentario:**  (HACER COMENTARIO)
 
@@ -71,7 +71,7 @@ WHERE
 
 **Resultado:**
 
-![PONER FOTO EJ 03](./img/Ejercicio01.png)
+![PONER FOTO EJ 03](./img/Ejercicio01.pn)
 
 **Comentario:**  (HACER COMENTARIO)
 
@@ -98,7 +98,7 @@ order by s.country,p.product_name;
 
 **Resultado:**
 
-![PONER FOTO EJ 04](./img/Ejercicio01.png)
+![PONER FOTO EJ 04](./img/Ejercicio01.pn)
 
 **Comentario:**  (HACER COMENTARIO)
 
@@ -127,7 +127,7 @@ WHERE
 
 **Resultado:**
 
-![PONER FOTO EJ 05](./img/Ejercicio01.png)
+![PONER FOTO EJ 05](./img/Ejercicio01.pn)
 
 **Comentario:**  (HACER COMENTARIO)
 
@@ -143,6 +143,6 @@ WHERE
 
 **Resultado:**
 
-![PONER FOTO EJ 06](./img/Ejercicio01.png)
+![PONER FOTO EJ 06](./img/Ejercicio01.pn)
 
 **Comentario:**  (HACER COMENTARIO)
