@@ -18,6 +18,6 @@ order by
 
 **Resultado:**
 
-![Resultado pregunta](./img/ejercicio01.png)
+![Resultado pregunta](./img/Ejercicio01.png)
 
 **Comentario:** He usado `NUMERIC` ya que la columna unit_price esta declarado como un numero real y `ROUND()` necesita de un `Numeric` o un `Decimal` si no el código no funcionaría.
