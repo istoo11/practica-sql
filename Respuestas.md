@@ -206,3 +206,306 @@ FROM
 ![PONER FOTO EJ 08](./img/Ejercicio08.png)
 
 **Comentario:**  He utilizado un LEFT JOIN de la tabla employees consigo misma porque cada empleado puede tener un responsable que también pertenece a la misma tabla. Se utiliza LEFT JOIN para que también aparezcan los empleados que no tienen responsable, y mediante COALESCE se muestra DIRECCION GENERAL en esos casos en lugar de dejar el valor vacío.
+
+## Pregunta 09 — Rejilla de cobertura categoría × año 
+
+**Enunciado:** Control de gestión quiere una rejilla completa de facturación por categoría y año, **sin huecos**: si una categoría no vendió nada en un año concreto, debe aparecer con un 0, no desaparecer de la tabla.
+Genera todas las combinaciones posibles de las 8 categorías con los 3 años del histórico (24 filas) y asocia a cada combinación su facturación. Ordena por categoría y año.
+
+**Consulta:**
+
+```sql
+SELECT cat.category_name AS categoria,
+       anios.anio,
+       COALESCE(ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)), 2), 0) AS facturacion
+FROM categories cat
+CROSS JOIN (
+    SELECT DISTINCT EXTRACT(YEAR FROM order_date)::int AS anio 
+    FROM orders
+) anios
+LEFT JOIN products p ON cat.category_id = p.category_id
+LEFT JOIN order_details od ON p.product_id = od.product_id
+LEFT JOIN orders o ON od.order_id = o.order_id AND EXTRACT(YEAR FROM o.order_date) = anios.anio
+GROUP BY cat.category_name, anios.anio
+ORDER BY cat.category_name ASC, anios.anio ASC;
+```
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio09.png)
+
+**Comentario:**  
+
+He utilizado un CROSS JOIN con los años para garantizar que aparezcan todas las categorías en cada periodo, combinándolo con LEFT JOIN y COALESCE para mostrar un 0 en lugar de nulos cuando no hay ventas. Asimismo, se emplea el casteo a numeric, el cálculo de descuentos y ROUND para asegurar una precisión monetaria exacta en la facturación total.
+
+## Pregunta 10 - Mapa de países: clientes frente a proveedores
+
+**Enunciado:** 
+
+Expansión internacional quiere una única tabla que muestre, para cada país en el que la compañía tiene presencia, cuántos clientes y cuántos proveedores hay. Deben aparecer los países que solo tienen clientes, los que solo tienen proveedores y los que tienen ambos.
+
+**Consulta:**
+
+```sql
+SELECT COALESCE(c.country, s.country) AS pais,
+       COALESCE(c.num_clientes, 0) AS num_clientes,
+       COALESCE(s.num_proveedores, 0) AS num_proveedores,
+       CASE 
+           WHEN c.country IS NOT NULL AND s.country IS NOT NULL THEN 'AMBOS'
+           WHEN c.country IS NOT NULL THEN 'SOLO CLIENTES'
+           ELSE 'SOLO PROVEEDORES'
+       END AS tipo_presencia
+FROM (
+    SELECT country, COUNT(*) AS num_clientes 
+    FROM customers 
+    GROUP BY country
+) c
+FULL OUTER JOIN (
+    SELECT country, COUNT(*) AS num_proveedores 
+    FROM suppliers 
+    GROUP BY country
+) s ON c.country = s.country
+ORDER BY pais ASC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio10.png)
+
+**Comentario:**  
+
+Se emplea un FULL OUTER JOIN entre las subconsultas agrupadas de clientes y proveedores para unificar todos los países sin perder aquellos que solo existan en una tabla. Además, se utiliza COALESCE para gestionar los nombres de los países y reemplazar los recuentos vacíos por ceros, mientras que el bloque CASE clasifica automáticamente el tipo de presencia comercial en cada territorio.
+
+## Pregunta 11 - Directorio unificado de contactos
+
+**Enunciado:** 
+
+Sistemas va a migrar el CRM y necesita una exportación única con todos los contactos de la compañía, vengan de donde vengan.
+Construye una sola tabla que reúna los contactos de clientes, los de proveedores y los empleados. Cada fila debe indicar el origen (`'CLIENTE'`, `'PROVEEDOR'`, `'EMPLEADO'`), el nombre de la persona de contacto **en mayúsculas**, la organización a la que pertenece, la ciudad y el país. Para los empleados, la organización es el literal `'NORTHWIND TRADERS'` y el nombre de contacto se forma concatenando nombre y apellidos.
+Ordena por origen y luego por país.
+
+**Consulta:**
+
+```sql
+SELECT 'CLIENTE' AS origen,
+       UPPER(contact_name) AS contacto,
+       company_name AS organizacion,
+       city AS ciudad,
+       country AS pais
+FROM customers
+
+UNION ALL
+
+SELECT 'PROVEEDOR' AS origen,
+       UPPER(contact_name) AS contacto,
+       company_name AS organizacion,
+       city AS ciudad,
+       country AS pais
+FROM suppliers
+
+UNION ALL
+
+SELECT 'EMPLEADO' AS origen,
+       UPPER(first_name || ' ' || last_name) AS contacto,
+       'NORTHWIND TRADERS' AS organizacion,
+       city AS ciudad,
+       country AS pais
+FROM employees
+ORDER BY origen ASC, pais ASC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio11.png)
+
+**Comentario:**  
+
+Se utiliza UNION ALL para combinar de forma eficiente y sin filtrar duplicados los registros de clientes, proveedores y empleados en un único listado homogéneo. Cada bloque asigna una etiqueta de origen mediante literales ('CLIENTE', 'PROVEEDOR', 'EMPLEADO'), estandariza los nombres a mayúsculas —concatenando el nombre y apellido para los empleados— y unifica la estructura de columnas para ordenar finalmente el resultado por origen y país.
+
+## Pregunta 12 - Mercados con desequilibrio
+
+**Enunciado:** 
+
+Compras y Ventas mantienen una discusión recurrente: ¿en qué países vendemos sin tener proveedor local, y en cuáles coincidimos?
+Resuelve las dos preguntas en dos consultas independientes:
+- Países donde hay clientes pero **ningún** proveedor.
+- Países donde hay **a la vez** clientes y proveedores.
+Ordena ambos resultados alfabéticamente.
+
+**Consulta:**
+
+```sql
+SELECT country AS pais FROM customers
+EXCEPT
+SELECT country FROM suppliers
+ORDER BY pais ASC;
+
+
+SELECT country AS pais FROM customers
+INTERSECT
+SELECT country FROM suppliers
+ORDER BY pais ASC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio12A.png)
+![PONER FOTO](./img/Ejercicio12B.png)
+
+**Comentario:** 
+
+Comentario apartado A
+
+Se emplea el operador EXCEPT para identificar y aislar aquellos países que tienen clientes registrados pero que no cuentan con ningún proveedor asociado. De este modo, se eliminan las coincidencias de ambas tablas para obtener una lista exclusiva de mercados con clientes únicos, ordenando finalmente el resultado de forma alfabética.
+
+Comentario apartado B
+
+Se emplea el operador INTERSECT para identificar y mostrar únicamente aquellos países que tienen presencia tanto en la tabla de clientes como en la de proveedores. De este modo, se obtienen las coincidencias comunes de ambos conjuntos de datos, ordenando finalmente el resultado de forma alfabética por el nombre del país.
+
+## Pregunta 13 - Clientes que nunca han comprado pescado
+
+**Enunciado:** 
+
+El responsable de la categoría Seafood quiere una lista de cuentas sobre las que hacer campaña de captación.
+Localiza los clientes que **nunca** han incluido un producto de la categoría `'Seafood'` en ninguno de sus pedidos. Muestra el nombre del cliente, su país y el número total de pedidos que sí ha realizado, de mayor a menor.
+
+**Consulta:**
+
+```sql
+SELECT c.company_name AS cliente,
+       c.country AS pais,
+       COUNT(o.order_id) AS pedidos_realizados
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM orders o2
+    INNER JOIN order_details od ON o2.order_id = od.order_id
+    INNER JOIN products p ON od.product_id = p.product_id
+    INNER JOIN categories cat ON p.category_id = cat.category_id
+    WHERE o2.customer_id = c.customer_id
+      AND cat.category_name = 'Seafood'
+)
+GROUP BY c.company_name, c.country
+ORDER BY pedidos_realizados DESC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio13.png)
+
+**Comentario:** 
+
+Se emplea un LEFT JOIN junto con un recuento (COUNT) para listar a todos los clientes y su número total de pedidos, utilizando además la cláusula NOT EXISTS con una subconsulta correlacionada para excluir rigurosamente a aquellos clientes que hayan comprado productos de la categoría 'Seafood'. Finalmente, se agrupan los datos por cliente y país, ordenando el resultado de mayor a menor según la cantidad de pedidos realizados.
+
+## Pregunta 14 - Productos por encima de la media
+
+**Enunciado:** 
+
+El comité de precios quiere identificar el segmento premium del catálogo.
+Muestra los productos activos cuyo precio unitario supere el precio medio de **todo** el catálogo. Incluye en cada fila el precio del producto, el precio medio general y la diferencia entre ambos, todo redondeado a dos decimales. Ordena por diferencia descendente.
+
+**Consulta:**
+
+```sql
+SELECT product_name AS producto,
+       ROUND(unit_price::numeric, 2) AS precio,
+       ROUND((SELECT AVG(unit_price::numeric) FROM products WHERE discontinued = 0), 2) AS precio_medio_catalogo,
+       ROUND(unit_price::numeric - (SELECT AVG(unit_price::numeric) FROM products WHERE discontinued = 0), 2) AS diferencia
+FROM products
+WHERE discontinued = 0
+  AND unit_price > (SELECT AVG(unit_price::numeric) FROM products WHERE discontinued = 0)
+ORDER BY diferencia DESC;
+```
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio14.png)
+
+**Comentario:**  
+
+Se emplean subconsultas escalares para calcular de forma dinámica el precio medio de los productos activos, filtrando el catálogo para mostrar únicamente aquellos artículos cuyo precio supera dicha media. Asimismo, se utiliza el casteo a numeric junto con ROUND para asegurar la precisión decimal al calcular la diferencia exacta de cada producto frente al promedio, ordenando finalmente el resultado de mayor a menor según este margen.
+
+## Pregunta 15 - Ticket medio por cliente
+
+**Enunciado:** 
+
+Dirección comercial quiere segmentar la cartera por valor medio de pedido, no por volumen total.
+Calcula, para cada cliente que haya comprado alguna vez, el número de pedidos, el importe total acumulado y el importe medio por pedido. Muestra los 15 clientes con mayor ticket medio.
+El cálculo tiene dos niveles: primero hay que obtener el importe de cada pedido sumando sus líneas, y solo después promediar esos importes por cliente. **Promediar directamente las líneas daría un resultado distinto y equivocado.**
+
+**Consulta:**
+
+```sql
+SELECT c.company_name AS cliente,
+       c.country AS pais,
+       COUNT(t.order_id) AS num_pedidos,
+       ROUND(SUM(t.importe_pedido), 2) AS importe_total,
+       ROUND(AVG(t.importe_pedido), 2) AS ticket_medio
+FROM customers c
+INNER JOIN (
+    SELECT order_id,
+           customer_id,
+           SUM((unit_price::numeric) * quantity * (1 - discount::numeric)) AS importe_pedido
+    FROM order_details
+    INNER JOIN orders USING (order_id)
+    GROUP BY order_id, customer_id
+) t ON c.customer_id = t.customer_id
+GROUP BY c.company_name, c.country
+ORDER BY ticket_medio DESC
+LIMIT 15;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio15.png)
+
+**Comentario:** 
+
+Se utiliza una subconsulta previa para calcular el importe monetario exacto de cada pedido individual aplicando descuentos y conversiones a numeric, permitiendo cruzarla posteriormente con la tabla de clientes. Esto facilita la agregación final para calcular de forma limpia el número de pedidos, la facturación total y el ticket medio por cada cliente, ordenando los resultados de mayor a menor para aislar los 15 principales.
+
+## Pregunta 16 - El producto más caro de cada categoría
+
+**Enunciado:** 
+
+El equipo de compras quiere revisar el posicionamiento de precio en cada familia.
+Para cada categoría, muestra el producto con el precio unitario más alto. Incluye el nombre de la categoría, el nombre del producto, su precio y el precio medio de su categoría.
+Resuélvelo con una **subconsulta correlacionada**: para cada producto, comprueba si su precio coincide con el máximo de su propia categoría.
+
+**Consulta:**
+
+```sql
+SELECT c.category_name AS categoria,
+       p.product_name AS producto,
+       ROUND(p.unit_price::numeric, 2) AS precio,
+       ROUND((
+           SELECT AVG(p_avg.unit_price::numeric)
+           FROM products p_avg
+           WHERE p_avg.category_id = p.category_id
+       ), 2) AS precio_medio_categoria
+FROM products p
+INNER JOIN categories c ON p.category_id = c.category_id
+WHERE p.unit_price = (
+    SELECT MAX(p_max.unit_price)
+    FROM products p_max
+    WHERE p_max.category_id = p.category_id
+)
+ORDER BY c.category_name ASC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio16.png)
+
+**Comentario:**  
+
+Se emplea una subconsulta correlacionada en el filtro WHERE junto con la función MAX para aislar y mostrar únicamente el producto más caro de cada categoría. Asimismo, se utiliza otra subconsulta escalar correlacionada para calcular de forma dinámica el precio medio específico de esa misma categoría, aplicando un casteo a numeric y ROUND para mantener la precisión decimal. Finalmente, se cruzan las tablas con un INNER JOIN y se ordena alfabéticamente el resultado por el nombre de la categoría.
+
+
+## Pregunta 
+**Enunciado:** 
+**Consulta:**
+```sql
+
+```
+**Resultado:**
+![PONER FOTO](./img/Ejercicio0.png)
+**Comentario:**  
