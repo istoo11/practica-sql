@@ -499,13 +499,199 @@ ORDER BY c.category_name ASC;
 
 Se emplea una subconsulta correlacionada en el filtro WHERE junto con la función MAX para aislar y mostrar únicamente el producto más caro de cada categoría. Asimismo, se utiliza otra subconsulta escalar correlacionada para calcular de forma dinámica el precio medio específico de esa misma categoría, aplicando un casteo a numeric y ROUND para mantener la precisión decimal. Finalmente, se cruzan las tablas con un INNER JOIN y se ordena alfabéticamente el resultado por el nombre de la categoría.
 
+## Pregunta 17 - Segmentación ABC de la cartera de clientes
 
-## Pregunta 
 **Enunciado:** 
-**Consulta:**
-```sql
 
+Dirección quiere clasificar a los clientes en tres tramos de valor para asignar recursos comerciales.
+Usando expresiones de tabla común (CTE), construye una consulta que:
+
+1. Calcule la facturación total de cada cliente.
+2. Divida los clientes en **cuartiles** según esa facturación.
+3. Asigne una etiqueta de segmento: `'A - Estratégico'` al cuartil superior, `'B - Consolidado'` al segundo, `'C - Ocasional'` al tercero y `'D - Marginal'` al cuarto.
+4. Devuelva, por segmento, el número de clientes, la facturación total del segmento y el porcentaje que representa sobre el total de la compañía.
+   
+**Consulta:**
+
+```sql
+WITH facturacion_cliente AS (
+    SELECT o.customer_id,
+           SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)) AS facturacion
+    FROM orders o
+    INNER JOIN order_details od ON o.order_id = od.order_id
+    GROUP BY o.customer_id
+),
+segmentacion AS (
+    SELECT customer_id,
+           facturacion,
+           NTILE(4) OVER (ORDER BY facturacion DESC) AS cuartil
+    FROM facturacion_cliente
+),
+etiquetado AS (
+    SELECT customer_id,
+           facturacion,
+           CASE cuartil
+               WHEN 1 THEN 'A - Estratégico'
+               WHEN 2 THEN 'B - Consolidado'
+               WHEN 3 THEN 'C - Ocasional'
+               WHEN 4 THEN 'D - Marginal'
+           END AS segmento
+    FROM segmentacion
+)
+SELECT segmento,
+       COUNT(*) AS num_clientes,
+       ROUND(SUM(facturacion), 2) AS facturacion_segmento,
+       ROUND((SUM(facturacion) / (SELECT SUM(facturacion) FROM facturacion_cliente) * 100), 2) AS porcentaje_sobre_total
+FROM etiquetado
+GROUP BY segmento
+ORDER BY facturacion_segmento DESC;
+```
+
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio17.png)
+
+**Comentario:**  
+
+Se emplean expresiones de tabla comunes para estructurar la lógica por fases, utilizando la función de ventana NTILE(4) para dividir a los clientes en cuatro cuartiles según su facturación. Asimismo, se usa una sentencia CASE para asignar etiquetas cualitativas a cada segmento y se calcula el porcentaje de contribución de cada grupo respecto al total general mediante una subconsulta escalar, agrupando y ordenando finalmente los resultados por la facturación del segmento.
+
+## Pregunta 18 - Los tres productos más vendidos de cada categoría
+
+**Enunciado:** 
+
+El equipo de categoría necesita el podio de cada familia para negociar con proveedores.
+Para cada categoría, obtén los **tres productos con mayor facturación**. Muestra la categoría, la posición dentro de la categoría, el nombre del producto, las unidades vendidas y la facturación.
+Incluye además una columna con la posición global del producto en el conjunto de la compañía, para que se vea qué productos son líderes de su nicho pero irrelevantes en el total.
+
+**Consulta:**
+
+```sql
+WITH ventas_producto AS (
+    SELECT p.category_id,
+           p.product_id,
+           p.product_name AS producto,
+           SUM(od.quantity) AS unidades,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)), 2) AS facturacion
+    FROM products p
+    INNER JOIN order_details od ON p.product_id = od.product_id
+    GROUP BY p.category_id, p.product_id, p.product_name
+),
+rankings AS (
+    SELECT vp.*,
+           DENSE_RANK() OVER (PARTITION BY vp.category_id ORDER BY vp.facturacion DESC) AS posicion_en_categoria,
+           DENSE_RANK() OVER (ORDER BY vp.facturacion DESC) AS posicion_global
+    FROM ventas_producto vp
+)
+SELECT c.category_name AS categoria,
+       r.posicion_en_categoria,
+       r.producto,
+       r.unidades,
+       r.facturacion,
+       r.posicion_global
+FROM rankings r
+INNER JOIN categories c ON r.category_id = c.category_id
+WHERE r.posicion_en_categoria <= 3
+ORDER BY c.category_name ASC, r.posicion_en_categoria ASC;
 ```
 **Resultado:**
-![PONER FOTO](./img/Ejercicio0.png)
+
+![PONER FOTO](./img/Ejercicio18.png)
+
+**Comentario:** 
+
+Se estructuran expresiones de tabla comunes (para agrupar ventas y facturación por producto, aplicando posteriormente la función de ventana DENSE_RANK() para calcular de forma simultánea su posición interna por categoría y su ranking global. Por último, se cruza la información con la tabla de categorías y se filtra para mostrar exclusivamente el podio (top 3) de cada grupo, ordenando los resultados alfabéticamente por categoría y de forma ascendente por su puesto.
+
+## Pregunta 19 - Evolución mensual con acumulado y media móvil
+
+**Enunciado:** 
+
+Control de gestión prepara el cuadro de mando de la evolución del negocio durante 1997.
+Para cada mes de 1997, calcula:
+
+- La facturación del mes.
+- El total acumulado desde enero.
+- La media móvil de los tres últimos meses (el mes actual y los dos anteriores).
+- La facturación del mes anterior.
+- La variación porcentual respecto al mes anterior.
+  
+**Consulta:**
+
+```sql
+WITH ventas_1997 AS (
+    SELECT DATE_TRUNC('month', o.order_date)::date AS mes,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)), 2) AS facturacion
+    FROM orders o
+    INNER JOIN order_details od ON o.order_id = od.order_id
+    WHERE o.order_date >= '1997-01-01' AND o.order_date < '1998-01-01'
+    GROUP BY DATE_TRUNC('month', o.order_date)::date
+)
+SELECT mes,
+       facturacion,
+       SUM(facturacion) OVER (
+           ORDER BY mes
+       ) AS acumulado,
+       ROUND(AVG(facturacion) OVER (
+           ORDER BY mes 
+           ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+       ), 2) AS media_movil_3m,
+       LAG(facturacion) OVER (
+           ORDER BY mes
+       ) AS mes_anterior,
+       ROUND(((facturacion - LAG(facturacion) OVER (ORDER BY mes)) / LAG(facturacion) OVER (ORDER BY mes) * 100), 2) AS variacion_pct
+FROM ventas_1997
+ORDER BY mes ASC;
+```
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio19.png)
+
 **Comentario:**  
+
+Se emplea una expresión de tabla común (CTE) para agrupar la facturación mensual de 1997 con cálculos monetarios precisos, sobre la cual se aplican funciones de ventana para calcular un acumulado progresivo, una media móvil trimestral y la función LAG para determinar la variación porcentual mes a mes. Finalmente, los datos se ordenan cronológicamente para facilitar el análisis de la evolución temporal de las ventas.
+
+## Pregunta 20 - Cuadro de mando anual por categoría
+
+**Enunciado:** 
+
+Última petición, y la más ambiciosa: el informe anual que se presenta al consejo.
+Construye una tabla donde cada fila sea una categoría y las columnas muestren la facturación de 1996, 1997 y 1998 en columnas separadas, más el total de los tres años. Añade al final una fila de totales generales.
+Incluye además una columna que indique el peso de cada categoría sobre la facturación total de la compañía, y otra que muestre si la categoría creció o decreció entre 1997 y 1998.
+
+**Consulta:**
+```sql
+WITH ventas_base AS (
+    SELECT c.category_name,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)) 
+                 FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1996), 2) AS f_1996,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)) 
+                 FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1997), 2) AS f_1997,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)) 
+                 FILTER (WHERE EXTRACT(YEAR FROM o.order_date) = 1998), 2) AS f_1998,
+           ROUND(SUM((od.unit_price::numeric) * od.quantity * (1 - od.discount::numeric)), 2) AS total
+    FROM categories c
+    INNER JOIN products p ON c.category_id = p.category_id
+    INNER JOIN order_details od ON p.product_id = od.product_id
+    INNER JOIN orders o ON od.order_id = o.order_id
+    GROUP BY ROLLUP(c.category_name)
+)
+SELECT COALESCE(category_name, 'TOTAL GENERAL') AS categoria,
+       COALESCE(f_1996, 0) AS f_1996,
+       COALESCE(f_1997, 0) AS f_1997,
+       COALESCE(f_1998, 0) AS f_1998,
+       total,
+       ROUND((total / (SELECT total FROM ventas_base WHERE category_name IS NULL) * 100), 2) AS peso_pct,
+       CASE 
+           WHEN category_name IS NULL THEN 'N/A'
+           WHEN f_1998 > f_1997 THEN 'CRECE'
+           ELSE 'DECRECE'
+       END AS tendencia
+FROM ventas_base
+ORDER BY (category_name IS NULL) ASC, total DESC;
+```
+**Resultado:**
+
+![PONER FOTO](./img/Ejercicio20.png)
+
+**Comentario:** 
+
+Se utiliza una expresión de tabla común para filtrar y agrupar la facturación mensual del año 1997 aplicando cálculos monetarios precisos con descuentos. A continuación, se emplean funciones de ventana para calcular un acumulado anual progresivo, una media móvil de tres meses para suavizar la tendencia estacional, y la función LAG junto con operaciones aritméticas para determinar la variación porcentual mes a mes. Finalmente, se ordenan los resultados de forma cronológica para facilitar el análisis temporal de las ventas.
