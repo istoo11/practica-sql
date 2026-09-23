@@ -595,7 +595,7 @@ ORDER BY c.category_name ASC, r.posicion_en_categoria ASC;
 ```
 **Resultado:**
 
-![PONER FOTO](./img/Ejercicio18.png)
+![PONER FOTO](./img/Ejercicio018.png)
 
 **Comentario:** 
 
